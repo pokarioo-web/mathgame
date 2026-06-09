@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수학 퀴즈 웹앱</title>
+    <style>
+        /* 선생님의 기존 CSS 스타일을 그대로 유지하시되, 아래 랭킹용 스타일을 추가하거나 참고하세요 */
+        body { font-family: 'Malgun Gothic', sans-serif; text-align: center; background-color: #f4f7f6; padding: 20px; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .screen { display: none; }
+        .active { display: block; }
+        input, button { width: 80%; padding: 10px; margin: 10px 0; font-size: 16px; border-radius: 5px; border: 1px solid #ccc; }
+        button { background-color: #4CAF50; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #45a049; }
+        .ranking-box { margin-top: 20px; text-align: left; background: #eee; padding: 15px; border-radius: 8px; }
+        .ranking-title { font-weight: bold; color: #333; margin-bottom: 5px; border-bottom: 2px solid #4CAF50; padding-bottom: 5px; }
+        .king-section { background: #fff3cd; padding: 10px; border-radius: 5px; margin-bottom: 10px; border-left: 5px solid #ffc107; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- [화면 1] 로그인 및 랭킹 확인 화면 -->
+    <div id="loginScreen" class="screen active">
+        <h2>🧮 수학 퀴즈 레이스</h2>
+        <input type="number" id="grade" placeholder="학년 (예: 6)" min="1" max="6">
+        <input type="number" id="classNum" placeholder="반 (예: 3)">
+        <input type="text" id="studentName" placeholder="이름 입력">
+        <button onclick="startQuiz()">퀴즈 시작하기</button>
+
+        <!-- 첫 화면 실시간 랭킹 표시 존 -->
+        <div class="ranking-box">
+            <div class="ranking-title">🏆 명예의 전당</div>
+            <div id="kingHall">랭킹 정보를 불러오는 중...</div>
+        </div>
+    </div>
+
+    <!-- [화면 2] 퀴즈 진행 화면 (기존 선생님 퀴즈 화면 구성 유지) -->
+    <div id="quizScreen" class="screen">
+        <h3>문제를 풀어보세요!</h3>
+        <!-- 게임 진행용 본문 (기존 코드의 문제 표시 및 입력창 배치) -->
+        <div id="questionDisplay" style="font-size: 24px; margin: 20px 0;">Loading...</div>
+        <input type="number" id="answerInput" placeholder="정답 입력" onkeyup="if(window.event.keyCode==13){checkAnswer()}">
+        <button onclick="checkAnswer()">정답 제출</button>
+        <div id="comboDisplay" style="color: red; font-weight: bold;"></div>
+    </div>
+
+    <!-- [화면 3] 결과 화면 -->
+    <div id="resultScreen" class="screen">
+        <h2>🎉 게임 종료!</h2>
+        <div id="finalResultText" style="font-size: 18px; line-height: 1.6; margin: 20px 0;"></div>
+        <button onclick="location.reload()">다시 처음으로</button>
+    </div>
+</div>
+
+<script>
+    // ⚠️ 중요: 새로 배포한 구글 앱스 스크립트 URL을 여기에 넣어주세요!
+    const GAS_URL = "YOUR_APPS_SCRIPT_URL_HERE"; https://script.google.com/macros/s/AKfycby8droRObwW4g8gKgPvzW0x7wEyJ6GzB0VjBhBLVf1GIP4uFaGzoFUgdYvqLsB9CAEs/exec
+
+    // 게임 데이터 변수들
+    var currentCorrect = 0;
+    var currentCombo = 0;
+    var maxCombo = 0;
+    var totalQuestions = 0;
+
+    // 페이지 로드시 바로 랭킹 불러오기
+    window.onload = function() {
+        loadRanking();
+    };
+
+    // 실시간 랭킹 받아오기 (구글 시트 데이터 기반)
+    function loadRanking() {
+        const kingHall = document.getElementById("kingHall");
+        
+        fetch(GAS_URL)
+        .then(response => response.json())
+        .then(data => {
+            if (!data || data.length === 0) {
+                kingHall.innerHTML = "<p style='text-align:center; color:#666;'>아직 참여한 학생이 없습니다. 첫 주인공이 되어보세요!</p>";
+                return;
+            }
+
+            // 1. 소수왕 선정 (맞은 문제 개수가 가장 많은 학생)
+            let topCorrect = [...data].sort((a, b) => b.correctCount - a.correctCount)[0];
+            // 2. 콤보왕 선정 (최다 콤보가 가장 높은 학생)
+            let topCombo = [...data].sort((a, b) => b.maxCombo - a.maxCombo)[0];
+
+            let htmlContent = `
+                <div class="king-section">
+                    🥇 <strong>소수왕 (최다 정답):</strong> <br>
+                    ${topCorrect.grade}학년 ${topCorrect.classNum}반 ${topCorrect.name} (${topCorrect.correctCount}문제 성공)
+                </div>
+                <div class="king-section" style="background:#e2f0d9; border-left-color:#70ad47;">
+                    🔥 <strong>콤보왕 (최다 콤보):</strong> <br>
+                    ${topCombo.grade}학년 ${topCombo.classNum}반 ${topCombo.name} (${topCombo.maxCombo}콤보 달성)
+                </div>
+            `;
+            kingHall.innerHTML = htmlContent;
+        })
+        .catch(err => {
+            kingHall.innerHTML = "<p style='color:red;'>랭킹을 불러오지 못했습니다.</p>";
+            console.error(err);
+        });
+    }
+
+    function startQuiz() {
+        if(!document.getElementById("grade").value || !document.getElementById("classNum").value || !document.getElementById("studentName").value) {
+            alert("학년, 반, 이름을 모두 입력해주세요!");
+            return;
+        }
+        document.getElementById("loginScreen").classList.remove("active");
+        document.getElementById("quizScreen").classList.add("active");
+        
+        // 초기화 및 첫 문제 출제 로직 실행
+        nextQuestion(); 
+    }
+
+    // [선생님의 기존 정답 체크 로직 함수 내부 예시]
+    function checkAnswer() {
+        totalQuestions++; // 풀이한 총 문제 수 증가
+        
+        let isCorrect = true; // (실제 정답 판별 조건식 대입 필요)
+        
+        if (isCorrect) {
+            currentCorrect++;
+            currentCombo++;
+            if (currentCombo > maxCombo) {
+                maxCombo = currentCombo;
+            }
+        } else {
+            currentCombo = 0; // 오답 시 콤보 깨짐
+        }
+        
+        // 제한 시간 종료 조건이나 판정 후 결과 전송 함수 호출
+        if (totalQuestions >= 10) { // 예시: 10문제를 다 풀었을 때 종료시킬 경우
+            endGame();
+        } else {
+            nextQuestion();
+        }
+    }
+
+    function nextQuestion() {
+        // 선생님의 기존 문제 출제용 코드 기입란
+        document.getElementById("questionDisplay").innerText = "문제 내용 예시입니다.";
+    }
+
+    // 게임이 끝났을 때 구글 시트로 모든 정보를 전송하는 함수
+    function endGame() {
+        document.getElementById("quizScreen").classList.remove("active");
+        document.getElementById("resultScreen").classList.add("active");
+        
+        document.getElementById("finalResultText").innerHTML = `
+            <strong>${document.getElementById("studentName").value}</strong> 학생의 기록<br>
+            정답 개수: ${currentCorrect}개 / 총 풀이 문제: ${totalQuestions}개<br>
+            최대 연속 콤보: ${maxCombo}회
+        `;
+
+        // 구글 시트로 보낼 완성 데이터 세트
+        const payload = {
+            grade: document.getElementById("grade").value,
+            classNum: document.getElementById("classNum").value,
+            name: document.getElementById("studentName").value,
+            correctCount: currentCorrect,   // 맞은 문제 개수
+            maxCombo: maxCombo,             // 최다 콤보 수
+            totalQuestions: totalQuestions  // 총 풀이한 문제 수
+        };
+
+        // 데이터 전송 fetch 요청
+        fetch(GAS_URL, {
+            method: "POST",
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(response => {
+            if(response.result === "success") {
+                console.log("구글 시트에 모든 데이터가 기록되었습니다.");
+            }
+        })
+        .catch(error => console.error("기록 실패:", error));
+    }
+</script>
+</body>
+</html>
