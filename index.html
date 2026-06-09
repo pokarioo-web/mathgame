@@ -1,184 +1,613 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>수학 퀴즈 웹앱</title>
-    <style>
-        /* 선생님의 기존 CSS 스타일을 그대로 유지하시되, 아래 랭킹용 스타일을 추가하거나 참고하세요 */
-        body { font-family: 'Malgun Gothic', sans-serif; text-align: center; background-color: #f4f7f6; padding: 20px; }
-        .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .screen { display: none; }
-        .active { display: block; }
-        input, button { width: 80%; padding: 10px; margin: 10px 0; font-size: 16px; border-radius: 5px; border: 1px solid #ccc; }
-        button { background-color: #4CAF50; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:hover { background-color: #45a049; }
-        .ranking-box { margin-top: 20px; text-align: left; background: #eee; padding: 15px; border-radius: 8px; }
-        .ranking-title { font-weight: bold; color: #333; margin-bottom: 5px; border-bottom: 2px solid #4CAF50; padding-bottom: 5px; }
-        .king-section { background: #fff3cd; padding: 10px; border-radius: 5px; margin-bottom: 10px; border-left: 5px solid #ffc107; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>소수 마스터 챌린지 🎒</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    @keyframes wiggle {
+      0%, 100% { transform: rotate(-3deg); }
+      50% { transform: rotate(3deg); }
+    }
+    .animate-wiggle { animation: wiggle 1s ease-in-out infinite; }
+    @keyframes scaleUp {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .animate-scaleUp { animation: scaleUp 0.2s ease-out forwards; }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+    .animate-shake { animation: shake 0.2s ease-in-out infinite; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
+    ::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.3); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.5); }
+  </style>
 </head>
-<body>
+<body class="bg-gradient-to-br from-emerald-950 via-teal-950 to-emerald-900 text-slate-100 min-h-screen">
 
-<div class="container">
-    <!-- [화면 1] 로그인 및 랭킹 확인 화면 -->
-    <div id="loginScreen" class="screen active">
-        <h2>🧮 수학 퀴즈 레이스</h2>
-        <input type="number" id="grade" placeholder="학년 (예: 6)" min="1" max="6">
-        <input type="number" id="classNum" placeholder="반 (예: 3)">
-        <input type="text" id="studentName" placeholder="이름 입력">
-        <button onclick="startQuiz()">퀴즈 시작하기</button>
+  <div id="root"></div>
 
-        <!-- 첫 화면 실시간 랭킹 표시 존 -->
-        <div class="ranking-box">
-            <div class="ranking-title">🏆 명예의 전당</div>
-            <div id="kingHall">랭킹 정보를 불러오는 중...</div>
-        </div>
-    </div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
 
-    <!-- [화면 2] 퀴즈 진행 화면 (기존 선생님 퀴즈 화면 구성 유지) -->
-    <div id="quizScreen" class="screen">
-        <h3>문제를 풀어보세요!</h3>
-        <!-- 게임 진행용 본문 (기존 코드의 문제 표시 및 입력창 배치) -->
-        <div id="questionDisplay" style="font-size: 24px; margin: 20px 0;">Loading...</div>
-        <input type="number" id="answerInput" placeholder="정답 입력" onkeyup="if(window.event.keyCode==13){checkAnswer()}">
-        <button onclick="checkAnswer()">정답 제출</button>
-        <div id="comboDisplay" style="color: red; font-weight: bold;"></div>
-    </div>
+    // =========================================================================
+    // [★ 선생님 설정 ★] 구글 스프레드시트 앱스 스크립트 웹앱 URL 연동
+    // =========================================================================
+    const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbzwkrKibyIoMwPxrmgpeWAhYa4YUJC53hXNfGfJ1aIgfMy8ODLSe3aPsjrI2CotZoU/exec"; 
 
-    <!-- [화면 3] 결과 화면 -->
-    <div id="resultScreen" class="screen">
-        <h2>🎉 게임 종료!</h2>
-        <div id="finalResultText" style="font-size: 18px; line-height: 1.6; margin: 20px 0;"></div>
-        <button onclick="location.reload()">다시 처음으로</button>
-    </div>
-</div>
+    // ==========================================
+    // 효과음 시스템 (Web Audio API)
+    // ==========================================
+    class SoundEffects {
+      constructor() { this.ctx = null; this.muted = false; }
+      init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      playCorrect() {
+        if (this.muted) return; this.init();
+        const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+        osc.frequency.setValueAtTime(659.25, this.ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(783.99, this.ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.45);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.45);
+      }
+      playWrong() {
+        if (this.muted) return; this.init();
+        const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(80, this.ctx.currentTime + 0.35);
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.4);
+      }
+      playCombo(comboCount) {
+        if (this.muted) return; this.init();
+        const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.type = 'triangle'; const baseFreq = 440 + (comboCount * 30);
+        osc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
+        osc.frequency.setValueAtTime(baseFreq * 1.5, this.ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.3);
+      }
+      playTimeout() {
+        if (this.muted) return; this.init();
+        const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1046.50, this.ctx.currentTime + 1.0);
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 1.2);
+        osc.start(); osc.stop(this.ctx.currentTime + 1.2);
+      }
+    }
 
-<script>
-    // ⚠️ 중요: 새로 배포한 구글 앱스 스크립트 URL을 여기에 넣어주세요!
-    const GAS_URL = "YOUR_APPS_SCRIPT_URL_HERE"; https://script.google.com/macros/s/AKfycby8droRObwW4g8gKgPvzW0x7wEyJ6GzB0VjBhBLVf1GIP4uFaGzoFUgdYvqLsB9CAEs/exec
+    const sfx = new SoundEffects();
 
-    // 게임 데이터 변수들
-    var currentCorrect = 0;
-    var currentCombo = 0;
-    var maxCombo = 0;
-    var totalQuestions = 0;
-
-    // 페이지 로드시 바로 랭킹 불러오기
-    window.onload = function() {
-        loadRanking();
+    // ==========================================
+    // 소수의 나눗셈 수학 문제 생성기
+    // ==========================================
+    const generateProblem = (type) => {
+      let dividend, divisor, quotient, typeLabel, note;
+      switch (type) {
+        case 1: {
+          const quotientsPool = [1.2, 2.3, 3.4, 1.3, 2.1, 1.23, 2.12];
+          quotient = quotientsPool[Math.floor(Math.random() * quotientsPool.length)];
+          divisor = quotient.toString().includes('.') && quotient.toString().split('.')[1].length === 2 ? 2 : 3;
+          if (quotient === 3.4) divisor = 2;
+          dividend = parseFloat((quotient * divisor).toFixed(3));
+          typeLabel = "유형 1: 각 자리 나누어떨어짐";
+          note = "각 자리 숫자가 나누는 수로 가볍게 나누어떨어져요.";
+          break;
+        }
+        case 2: {
+          const pool = [{ q: 2.8, d: 3 }, { q: 1.45, d: 5 }, { q: 2.3, d: 4 }, { q: 1.6, d: 4 }, { q: 3.8, d: 2 }, { q: 2.7, d: 3 }, { q: 1.75, d: 5 }];
+          const selected = pool[Math.floor(Math.random() * pool.length)];
+          quotient = selected.q; divisor = selected.d; dividend = parseFloat((quotient * divisor).toFixed(3));
+          typeLabel = "유형 2: 받아내림이 있는 계산";
+          note = "내림이 발생하므로 차분하게 자릿수를 넘기며 계산하세요.";
+          break;
+        }
+        case 3: {
+          const pool = [{ q: 0.6, d: 4 }, { q: 0.25, d: 3 }, { q: 0.8, d: 7 }, { q: 0.15, d: 6 }, { q: 0.08, d: 6 }, { q: 0.42, d: 2 }];
+          const selected = pool[Math.floor(Math.random() * pool.length)];
+          quotient = selected.q; divisor = selected.d; dividend = parseFloat((quotient * divisor).toFixed(3));
+          typeLabel = "유형 3: 몫이 1보다 작은 소수";
+          note = "자연수 부분이 더 작을 때는 몫의 첫자리에 '0.'을 적습니다.";
+          break;
+        }
+        case 4: {
+          const pool = [{ q: 1.08, d: 5 }, { q: 0.65, d: 4 }, { q: 1.75, d: 2 }, { q: 2.15, d: 2 }, { q: 1.35, d: 6 }, { q: 0.45, d: 2 }];
+          const selected = pool[Math.floor(Math.random() * pool.length)];
+          quotient = selected.q; divisor = selected.d; dividend = parseFloat((quotient * divisor).toFixed(3));
+          typeLabel = "유형 4: 소수점 아래 0 내려 계산";
+          note = "끝자리에 숨어있는 0이 내려온다고 생각하고 계속 계산해 보세요.";
+          break;
+        }
+        case 5: {
+          const pool = [{ q: 3.01, d: 2 }, { q: 2.06, d: 4 }, { q: 1.03, d: 8 }, { q: 1.05, d: 5 }, { q: 2.02, d: 3 }, { q: 1.02, d: 7 }];
+          const selected = pool[Math.floor(Math.random() * pool.length)];
+          quotient = selected.q; divisor = selected.d; dividend = parseFloat((quotient * divisor).toFixed(3));
+          typeLabel = "유형 5: 몫의 중간에 0이 있는 경우";
+          note = "해당 자리에서 나누어지지 않을 때는 몫에 꼭 '0'을 채워주세요.";
+          break;
+        }
+        case 6: {
+          const pool = [{ q: 1.5, d: 2 }, { q: 1.25, d: 4 }, { q: 1.4, d: 5 }, { q: 2.25, d: 4 }, { q: 0.75, d: 4 }, { q: 0.4, d: 5 }];
+          const selected = pool[Math.floor(Math.random() * pool.length)];
+          quotient = selected.q; divisor = selected.d; dividend = parseFloat((quotient * divisor).toFixed(3));
+          typeLabel = "유형 6: (자연수) ÷ (자연수)";
+          note = "자연수끼리 나누지만 계산 결과 몫은 깔끔한 소수로 나옵니다.";
+          break;
+        }
+        default:
+          dividend = 6.8; divisor = 2; quotient = 3.4; typeLabel = "유형 1: 각 자리 나누어떨어짐"; note = "";
+      }
+      return { dividend, divisor, quotient, type, typeLabel, note };
     };
 
-    // 실시간 랭킹 받아오기 (구글 시트 데이터 기반)
-    function loadRanking() {
-        const kingHall = document.getElementById("kingHall");
-        
-        fetch(GAS_URL)
-        .then(response => response.json())
-        .then(data => {
-            if (!data || data.length === 0) {
-                kingHall.innerHTML = "<p style='text-align:center; color:#666;'>아직 참여한 학생이 없습니다. 첫 주인공이 되어보세요!</p>";
-                return;
-            }
+    // SVG 아이콘
+    const SparklesIcon = () => (<svg className="w-6 h-6 text-emerald-950" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>);
+    const Volume2Icon = () => (<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M12 18.75V5.25L7.75 9H4.5A1.5 1.5 0 003 10.5v3a1.5 1.5 0 001.5 1.5h3.25L12 18.75z" /></svg>);
+    const VolumeXIcon = () => (<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6H4.5A1.5 1.5 0 003 10.5v3a1.5 1.5 0 001.5 1.5h2.25L12 18.75V5.25L6.75 9z" /></svg>);
+    const PlayIcon = () => (<svg className="w-6 h-6 fill-current" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>);
+    const ClockIcon = () => (<svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>);
+    const FlameIcon = () => (<svg className="w-5 h-5 fill-current" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>);
+    const TrophyIcon = () => (<svg className="w-10 h-10 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>);
+    const RotateCcwIcon = () => (<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89" /></svg>);
 
-            // 1. 소수왕 선정 (맞은 문제 개수가 가장 많은 학생)
-            let topCorrect = [...data].sort((a, b) => b.correctCount - a.correctCount)[0];
-            // 2. 콤보왕 선정 (최다 콤보가 가장 높은 학생)
-            let topCombo = [...data].sort((a, b) => b.maxCombo - a.maxCombo)[0];
+    function App() {
+      const [screen, setScreen] = useState('start'); 
+      const [grade, setGrade] = useState('6');
+      const [classNum, setClassNum] = useState('');
+      const [studentName, setStudentName] = useState('');
+      
+      const [gameDuration, setGameDuration] = useState(300); 
+      const [countdown, setCountdown] = useState(3);
+      const [currentCombo, setCurrentCombo] = useState(0);
+      const [maxCombo, setMaxCombo] = useState(0);
+      const [timeLeft, setTimeLeft] = useState(300); 
+      const [totalQuestionsAnswered, setTotalQuestionsAnswered] = useState(0);
+      const [correctAnswersCount, setCorrectAnswersCount] = useState(0);
+      
+      const [currentQuestion, setCurrentQuestion] = useState(null);
+      const [questionIndex, setQuestionIndex] = useState(1); 
+      const [userInput, setUserInput] = useState('');
+      
+      const [feedback, setFeedback] = useState(null); 
+      const [shaking, setShaking] = useState(false);
+      const [comboPop, setComboPop] = useState(false);
+      const [isMuted, setIsMuted] = useState(false);
+      
+      // 구글 시트 연동 기반 실시간 랭킹 데이터 상태
+      const [sheetLeaderboard, setSheetLeaderboard] = useState([]);
+      const [loadingRanking, setLoadingRanking] = useState(true);
 
-            let htmlContent = `
-                <div class="king-section">
-                    🥇 <strong>소수왕 (최다 정답):</strong> <br>
-                    ${topCorrect.grade}학년 ${topCorrect.classNum}반 ${topCorrect.name} (${topCorrect.correctCount}문제 성공)
-                </div>
-                <div class="king-section" style="background:#e2f0d9; border-left-color:#70ad47;">
-                    🔥 <strong>콤보왕 (최다 콤보):</strong> <br>
-                    ${topCombo.grade}학년 ${topCombo.classNum}반 ${topCombo.name} (${topCombo.maxCombo}콤보 달성)
-                </div>
-            `;
-            kingHall.innerHTML = htmlContent;
-        })
-        .catch(err => {
-            kingHall.innerHTML = "<p style='color:red;'>랭킹을 불러오지 못했습니다.</p>";
-            console.error(err);
-        });
-    }
+      const timerRef = useRef(null);
+      const countdownRef = useRef(null);
 
-    function startQuiz() {
-        if(!document.getElementById("grade").value || !document.getElementById("classNum").value || !document.getElementById("studentName").value) {
-            alert("학년, 반, 이름을 모두 입력해주세요!");
-            return;
+      // 첫 화면 로드시 구글 시트로부터 실시간 데이터 로드 (요청사항 2 반영)
+      useEffect(() => {
+        if (screen === 'start') {
+          fetchRankingFromSheet();
         }
-        document.getElementById("loginScreen").classList.remove("active");
-        document.getElementById("quizScreen").classList.add("active");
-        
-        // 초기화 및 첫 문제 출제 로직 실행
-        nextQuestion(); 
-    }
+      }, [screen]);
 
-    // [선생님의 기존 정답 체크 로직 함수 내부 예시]
-    function checkAnswer() {
-        totalQuestions++; // 풀이한 총 문제 수 증가
+      const fetchRankingFromSheet = async () => {
+        setLoadingRanking(true);
+        try {
+          const res = await fetch(GOOGLE_SHEET_URL);
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setSheetLeaderboard(data);
+          }
+        } catch (err) {
+          console.error("구글 시트 랭킹을 로드하지 못했습니다.", err);
+        } finally {
+          setLoadingRanking(false);
+        }
+      };
+
+      useEffect(() => { sfx.muted = isMuted; }, [isMuted]);
+
+      const startCountdown = () => {
+        if (!grade || !classNum.trim() || !studentName.trim()) {
+          alert("학년, 반, 이름을 모두 정확하게 입력해 주세요!");
+          return;
+        }
+        setScreen('countdown');
+        setCountdown(3);
+        sfx.init();
+
+        countdownRef.current = setInterval(() => {
+          setCountdown((prev) => {
+            if (prev === 1) {
+              clearInterval(countdownRef.current);
+              startGame();
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      };
+
+      const startGame = () => {
+        setScreen('play');
+        setCurrentCombo(0);
+        setMaxCombo(0);
+        setTimeLeft(gameDuration); 
+        setTotalQuestionsAnswered(0);
+        setCorrectAnswersCount(0);
+        setQuestionIndex(1);
+        setUserInput('');
+        setFeedback(null);
         
-        let isCorrect = true; // (실제 정답 판별 조건식 대입 필요)
+        nextRandomQuestion();
+
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = setInterval(() => {
+          setTimeLeft((prev) => {
+            if (prev <= 1) {
+              clearInterval(timerRef.current);
+              endGame();
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      };
+
+      const nextRandomQuestion = () => {
+        const randomType = Math.floor(Math.random() * 6) + 1;
+        setCurrentQuestion(generateProblem(randomType));
+        setUserInput('');
+      };
+
+      const submitAnswer = () => {
+        if (feedback !== null || userInput.trim() === '') return;
+
+        const cleanInput = userInput.replace(/\s+/g, '');
+        const studentAnswer = parseFloat(cleanInput);
+        const actualAnswer = currentQuestion.quotient;
+        const isCorrect = Math.abs(studentAnswer - actualAnswer) < 0.0001; 
         
+        setTotalQuestionsAnswered(prev => prev + 1);
+
         if (isCorrect) {
-            currentCorrect++;
-            currentCombo++;
-            if (currentCombo > maxCombo) {
-                maxCombo = currentCombo;
-            }
+          sfx.playCorrect();
+          setCorrectAnswersCount(prev => prev + 1);
+          const nextCombo = currentCombo + 1;
+          setCurrentCombo(nextCombo);
+          if (nextCombo > maxCombo) setMaxCombo(nextCombo);
+          
+          if (nextCombo >= 3) {
+            sfx.playCombo(nextCombo);
+            setComboPop(true);
+            setTimeout(() => setComboPop(false), 800);
+          }
+          setFeedback({ status: 'correct', answer: actualAnswer });
+          setTimeout(() => {
+            setFeedback(null);
+            setQuestionIndex(prev => (prev === 10 ? 1 : prev + 1));
+            nextRandomQuestion();
+          }, 900);
         } else {
-            currentCombo = 0; // 오답 시 콤보 깨짐
+          sfx.playWrong();
+          setShaking(true);
+          setTimeout(() => setShaking(false), 500);
+          setCurrentCombo(0);
+          setFeedback({ status: 'wrong', answer: actualAnswer });
+          setTimeout(() => {
+            setFeedback(null);
+            setQuestionIndex(prev => (prev === 10 ? 1 : prev + 1));
+            nextRandomQuestion();
+          }, 1800);
         }
-        
-        // 제한 시간 종료 조건이나 판정 후 결과 전송 함수 호출
-        if (totalQuestions >= 10) { // 예시: 10문제를 다 풀었을 때 종료시킬 경우
-            endGame();
-        } else {
-            nextQuestion();
+      };
+
+      const endGame = () => {
+        sfx.playTimeout();
+        setScreen('result');
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
+
+      // 결과창 진입시 누락 없이 시트에 전송 (요청사항 1 반영)
+      useEffect(() => {
+        if (screen === 'result') {
+          sendToGoogleSheets();
         }
-    }
+      }, [screen]);
 
-    function nextQuestion() {
-        // 선생님의 기존 문제 출제용 코드 기입란
-        document.getElementById("questionDisplay").innerText = "문제 내용 예시입니다.";
-    }
-
-    // 게임이 끝났을 때 구글 시트로 모든 정보를 전송하는 함수
-    function endGame() {
-        document.getElementById("quizScreen").classList.remove("active");
-        document.getElementById("resultScreen").classList.add("active");
-        
-        document.getElementById("finalResultText").innerHTML = `
-            <strong>${document.getElementById("studentName").value}</strong> 학생의 기록<br>
-            정답 개수: ${currentCorrect}개 / 총 풀이 문제: ${totalQuestions}개<br>
-            최대 연속 콤보: ${maxCombo}회
-        `;
-
-        // 구글 시트로 보낼 완성 데이터 세트
-        const payload = {
-            grade: document.getElementById("grade").value,
-            classNum: document.getElementById("classNum").value,
-            name: document.getElementById("studentName").value,
-            correctCount: currentCorrect,   // 맞은 문제 개수
-            maxCombo: maxCombo,             // 최다 콤보 수
-            totalQuestions: totalQuestions  // 총 풀이한 문제 수
-        };
-
-        // 데이터 전송 fetch 요청
-        fetch(GAS_URL, {
-            method: "POST",
+      const sendToGoogleSheets = async () => {
+        if (!GOOGLE_SHEET_URL) return;
+        try {
+          const payload = {
+            grade: grade + "학년",
+            classNum: classNum + "반",
+            name: studentName.trim(),
+            correctCount: correctAnswersCount, // 맞은 문제 수
+            maxCombo: maxCombo,                 // 최다 콤보
+            totalQuestions: totalQuestionsAnswered // 총 풀이 문제 수
+          };
+          
+          await fetch(GOOGLE_SHEET_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
-        })
-        .then(res => res.json())
-        .then(response => {
-            if(response.result === "success") {
-                console.log("구글 시트에 모든 데이터가 기록되었습니다.");
-            }
-        })
-        .catch(error => console.error("기록 실패:", error));
+          });
+        } catch (error) {
+          console.error("구글 시트 전송에 실패했습니다.", error);
+        }
+      };
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (screen !== 'play') return;
+          if (e.key === 'Enter') submitAnswer();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [screen, userInput, currentQuestion, feedback]);
+
+      const handleKeypadPress = (val) => {
+        if (feedback !== null) return;
+        if (val === 'C') setUserInput('');
+        else if (val === 'back') setUserInput(prev => prev.slice(0, -1));
+        else if (val === '.') { if (!userInput.includes('.')) setUserInput(prev => prev + '.'); }
+        else { if (userInput.length < 8) setUserInput(prev => prev + val); }
+      };
+
+      const formatTime = (seconds) => {
+        const m = Math.floor(seconds / 60); const s = seconds % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      };
+
+      // 명칭 변경 반영 정렬 (요청사항 3: 소수왕, 콤보왕)
+      const topCorrectStudent = [...sheetLeaderboard].sort((a, b) => b.correctCount - a.correctCount)[0];
+      const topComboStudent = [...sheetLeaderboard].sort((a, b) => b.maxCombo - a.maxCombo)[0];
+
+      return (
+        <div className="min-h-screen flex flex-col justify-between selection:bg-amber-400 selection:text-slate-950">
+          
+          {/* HEADER */}
+          <header className="border-b border-emerald-800/60 bg-emerald-950/80 backdrop-blur-md sticky top-0 z-40 px-4 py-3 shadow-lg">
+            <div className="max-w-4xl mx-auto flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <div className="bg-amber-400 p-1.5 rounded-lg shadow-inner flex items-center justify-center animate-bounce">
+                  <SparklesIcon />
+                </div>
+                <div>
+                  <h1 className="font-extrabold text-lg sm:text-xl tracking-tight text-amber-300 drop-shadow">소수 마스터 챌린지 🎒</h1>
+                  <p className="text-xs text-emerald-400 hidden sm:block font-medium">초등학교 6학년 소수의 나눗셈 핵심 유형 완전 정복!</p>
+                </div>
+              </div>
+              <button onClick={() => setIsMuted(!isMuted)} className="p-2 rounded-full hover:bg-emerald-800 transition text-emerald-300">
+                {isMuted ? <VolumeXIcon /> : <Volume2Icon />}
+              </button>
+            </div>
+          </header>
+
+          {/* MAIN CONTAINER */}
+          <main className="flex-grow flex items-center justify-center p-4">
+            <div className="w-full max-w-xl bg-slate-900/95 border-2 border-emerald-500/30 rounded-[2.5rem] shadow-[0_0_50px_rgba(16,185,129,0.15)] overflow-hidden backdrop-blur-xl relative">
+              
+              {/* SCREEN 1: START SCREEN */}
+              {screen === 'start' && (
+                <div className="p-6 sm:p-10 flex flex-col items-center text-center space-y-5 animate-fade-in">
+                  
+                  {/* Blackboard Title Card */}
+                  <div className="w-full relative bg-gradient-to-b from-emerald-850 to-emerald-950 border-[6px] border-amber-900 rounded-[2rem] p-5 shadow-2xl flex flex-col items-center justify-center">
+                    <div className="absolute top-2 left-3 text-[10px] text-emerald-400/50 font-bold tracking-widest">UNIT 3. 소수의 나눗셈</div>
+                    <span className="text-3xl mb-1 animate-wiggle">✏️</span>
+                    <h2 className="text-3xl font-black text-amber-300 tracking-tight font-serif drop-shadow">소수 마스터 챌린지</h2>
+                  </div>
+
+                  {/* 요청사항 2: 첫 화면 명예의 전당 실시간 배치 */}
+                  <div className="w-full bg-slate-950/70 border border-emerald-500/20 rounded-2xl p-4 text-left space-y-2">
+                    <h3 className="text-xs font-bold text-amber-400 tracking-wider uppercase flex items-center gap-1">
+                      🏆 실시간 명예의 전당
+                    </h3>
+                    {loadingRanking ? (
+                      <p className="text-xs text-slate-500 text-center py-2 animate-pulse">구글 시트에서 최신 랭킹을 읽어오는 중...</p>
+                    ) : sheetLeaderboard.length === 0 ? (
+                      <p className="text-xs text-slate-500 text-center py-2">아직 도전 기록이 없습니다. 첫 소수왕이 되어보세요!</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {/* 요청사항 3: 이름 변경 (소수왕, 콤보왕) */}
+                        <div className="bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-xl">
+                          <p className="font-extrabold text-emerald-300 mb-0.5">🥇 소수왕 (최다 정답)</p>
+                          <p className="text-slate-300 font-medium truncate">{topCorrectStudent?.grade} {topCorrectStudent?.classNum} {topCorrectStudent?.name}</p>
+                          <p className="text-amber-400 font-mono font-bold mt-0.5">{topCorrectStudent?.correctCount}문제 돌파</p>
+                        </div>
+                        <div className="bg-orange-950/30 border border-orange-900/30 p-2.5 rounded-xl">
+                          <p className="font-extrabold text-orange-400 mb-0.5">🔥 콤보왕 (최다 콤보)</p>
+                          <p className="text-slate-300 font-medium truncate">{topComboStudent?.grade} {topComboStudent?.classNum} {topComboStudent?.name}</p>
+                          <p className="text-orange-400 font-mono font-bold mt-0.5">{topComboStudent?.maxCombo}연속 콤보</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* STUDENT INFO INPUT */}
+                  <div className="w-full space-y-3 bg-slate-950/50 p-4 rounded-2xl border border-emerald-900/40">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1 text-center">학년</label>
+                        <select value={grade} onChange={(e) => setGrade(e.target.value)} className="w-full px-2 py-2.5 bg-slate-900 border border-emerald-800/60 rounded-xl text-sm font-bold text-slate-100 text-center">
+                          <option value="6">6학년</option><option value="5">5학년</option><option value="4">4학년</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1 text-center">반</label>
+                        <input type="text" pattern="[0-9]*" inputMode="numeric" maxLength={2} value={classNum} onChange={(e) => setClassNum(e.target.value.replace(/[^0-9]/g, ''))} placeholder="예: 3" className="w-full px-2 py-2.5 bg-slate-900 border border-emerald-800/60 rounded-xl text-sm font-bold text-slate-100 text-center focus:ring-2 focus:ring-amber-400/50" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1 text-center">이름</label>
+                        <input type="text" maxLength={8} value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="이름" className="w-full px-2 py-2.5 bg-slate-900 border border-emerald-800/60 rounded-xl text-sm font-bold text-slate-100 text-center focus:ring-2 focus:ring-amber-400/50" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CHALLENGE TIMER MODE */}
+                  <div className="w-full space-y-2 bg-slate-950/50 p-3 rounded-2xl border border-emerald-900/40">
+                    <div className="grid grid-cols-2 gap-3">
+                      <button type="button" onClick={() => setGameDuration(180)} className={`py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex flex-col items-center justify-center gap-0.5 ${gameDuration === 180 ? 'bg-amber-400 text-emerald-950 ring-4 ring-amber-300/40 font-extrabold' : 'bg-slate-900 border border-emerald-850 text-slate-400'}`}>
+                        <span>⚡ 3분 스피드전</span>
+                      </button>
+                      <button type="button" onClick={() => setGameDuration(300)} className={`py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex flex-col items-center justify-center gap-0.5 ${gameDuration === 300 ? 'bg-amber-400 text-emerald-950 ring-4 ring-amber-300/40 font-extrabold' : 'bg-slate-900 border border-emerald-850 text-slate-400'}`}>
+                        <span>🔥 5분 정규전</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Play Button */}
+                  <button onClick={startCountdown} className="w-full py-4 bg-gradient-to-r from-amber-400 to-yellow-300 hover:from-amber-300 hover:to-yellow-200 text-emerald-950 text-xl font-black rounded-[1.25rem] shadow-lg transform active:scale-95 transition-all flex items-center justify-center space-x-2">
+                    <PlayIcon /><span>도전 시작하기! 🎯</span>
+                  </button>
+                </div>
+              )}
+
+              {/* SCREEN 2: COUNTDOWN */}
+              {screen === 'countdown' && (
+                <div className="p-12 flex flex-col items-center justify-center space-y-4 min-h-[350px]">
+                  <div className="text-slate-400 uppercase tracking-widest text-sm font-semibold">Ready?</div>
+                  <div className="text-8xl font-black text-amber-300 animate-bounce scale-110 drop-shadow">{countdown}</div>
+                  <div className="text-lg text-emerald-400 font-medium">나의 연산 한계를 깨워보세요!</div>
+                </div>
+              )}
+
+              {/* SCREEN 3: PLAYING */}
+              {screen === 'play' && currentQuestion && (
+                <div className={`p-5 space-y-4 transition-transform ${shaking ? 'animate-shake' : ''}`}>
+                  {/* Status Bar */}
+                  <div className="flex justify-between items-center bg-slate-950/75 p-3.5 rounded-2xl border border-emerald-900/40">
+                    <div className="flex items-center space-x-2">
+                      <ClockIcon /><span className={`font-mono text-xl font-extrabold ${timeLeft < 30 ? 'text-rose-500 animate-pulse' : 'text-slate-100'}`}>{formatTime(timeLeft)}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs text-slate-400 bg-slate-900 px-2 py-1 rounded-md">정답: <span className="font-bold text-amber-300">{correctAnswersCount}</span></span>
+                      <span className="text-xs text-slate-400 bg-slate-900 px-2 py-1 rounded-md">진행: <span className="font-bold text-emerald-400">{questionIndex} / 10</span></span>
+                    </div>
+                  </div>
+
+                  {/* Progressive Bar */}
+                  <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-1000 ${timeLeft < 30 ? 'bg-rose-500' : 'bg-gradient-to-r from-emerald-500 to-amber-400'}`} style={{ width: `${(timeLeft / gameDuration) * 100}%` }} />
+                  </div>
+
+                  {/* Combo Flag */}
+                  <div className="h-10 flex items-center justify-center">
+                    {currentCombo > 0 && (
+                      <div className={`flex items-center space-x-1 px-4 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 ${comboPop ? 'animate-bounce scale-110' : ''} transition-all`}>
+                        <FlameIcon /><span className="font-black text-base tracking-wider">{currentCombo} COMBO!</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* PROBLEM SCREEN */}
+                  <div className="relative bg-slate-950 border border-emerald-800/40 rounded-2xl p-6 flex flex-col items-center justify-center shadow-inner min-h-[140px]">
+                    <div className="absolute top-2 left-3 text-xs font-semibold text-emerald-400/80 bg-emerald-950/50 px-2.5 py-0.5 rounded-full border border-emerald-800/20">{currentQuestion.typeLabel}</div>
+                    <div className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-100 flex items-center space-x-3 mt-4 font-mono">
+                      <span>{currentQuestion.dividend}</span><span className="text-amber-400 text-3xl sm:text-4xl">÷</span><span>{currentQuestion.divisor}</span><span className="text-slate-400 text-3xl sm:text-4xl">=</span>
+                      <div className={`px-4 py-1.5 rounded-2xl border-2 min-w-[100px] text-center ${feedback?.status === 'correct' ? 'border-emerald-500 bg-emerald-950/20 text-emerald-400' : feedback?.status === 'wrong' ? 'border-rose-500 bg-rose-950/20 text-rose-400' : 'border-amber-400 bg-slate-900 text-amber-300'}`}>
+                        {userInput === '' ? <span className="text-slate-600 font-mono text-3xl">?</span> : <span className="font-mono text-3xl sm:text-4xl">{userInput}</span>}
+                      </div>
+                    </div>
+                    <div className="mt-4 text-xs text-slate-400 text-center max-w-sm">{currentQuestion.note}</div>
+                  </div>
+
+                  {/* FEEDBACK MSG */}
+                  {feedback && (
+                    <div className={`p-3 rounded-xl border text-center font-bold text-sm transition-all duration-300 ${feedback.status === 'correct' ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 animate-scaleUp' : 'bg-rose-950/80 border-rose-500 text-rose-300 animate-shake'}`}>
+                      {feedback.status === 'correct' ? <span>✨ 딩동댕! 아주 훌륭해요!</span> : <div className="flex flex-col items-center justify-center"><span>❌ 아쉽군요! 연속 콤보가 초기화되었습니다.</span><span className="text-xs text-slate-300 mt-1">올바른 정답은 <strong className="text-amber-300 font-extrabold">{feedback.answer}</strong> 입니다.</span></div>}
+                    </div>
+                  )}
+
+                  {/* Custom Touch Pad */}
+                  <div className="bg-slate-950/60 p-3 rounded-2xl border border-emerald-900/30">
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { val: '1', label: '1' }, { val: '2', label: '2' }, { val: '3', label: '3' }, { val: 'back', label: '⌫', className: 'bg-rose-950/85 text-rose-300 border-rose-900/30 hover:bg-rose-900' },
+                        { val: '4', label: '4' }, { val: '5', label: '5' }, { val: '6', label: '6' }, { val: 'C', label: '지움', className: 'bg-slate-800 text-slate-300 text-xs font-bold' },
+                        { val: '7', label: '7' }, { val: '8', label: '8' }, { val: '9', label: '9' }, { val: 'submit', label: '확인 ↵', className: 'row-span-2 bg-amber-400 text-emerald-950 font-extrabold text-lg' },
+                        { val: '0', label: '0', className: 'col-span-2' }, { val: '.', label: '.' }
+                      ].map((key, i) => (
+                        <button key={i} type="button" onClick={() => key.val === 'submit' ? submitAnswer() : handleKeypadPress(key.val)} className={`py-3.5 rounded-xl font-mono text-xl border transition-all active:scale-95 flex items-center justify-center shadow-sm ${key.className || 'bg-slate-900 border-emerald-950 text-slate-100'}`}>{key.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SCREEN 4: END & RESULTS */}
+              {screen === 'result' && (
+                <div className="p-6 sm:p-8 flex flex-col space-y-6 animate-scaleUp">
+                  <div className="text-center space-y-2">
+                    <div className="inline-flex p-3 bg-amber-400/10 border border-amber-400/30 rounded-2xl mb-1"><TrophyIcon /></div>
+                    <h2 className="text-2xl sm:text-3xl font-extrabold text-amber-300">도전 완료! 🎉</h2>
+                    <p className="text-sm text-slate-400"><strong className="text-teal-300">{grade}학년 {classNum}반 {studentName}</strong> 학생의 정밀 연산 보고서</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-950 p-4 rounded-2xl border border-emerald-900/40 text-center">
+                      <div className="text-xs text-slate-400">맞춘 문제 수 (소수왕)</div>
+                      <div className="text-3xl font-black text-amber-300 mt-1">{correctAnswersCount}개</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">총 {totalQuestionsAnswered}문제 시도</div>
+                    </div>
+                    <div className="bg-slate-950 p-4 rounded-2xl border border-emerald-900/40 text-center">
+                      <div className="text-xs text-slate-400">최대 정답 콤보 (콤보왕)</div>
+                      <div className="text-3xl font-black text-orange-400 mt-1 flex items-center justify-center space-x-1">
+                        <span className="text-xl">🔥</span><span>{maxCombo}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">집중력의 한계 도달!</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl p-4 text-center text-xs text-emerald-400 font-medium">
+                    📍 데이터가 구글 스프레드시트에 안전하게 누락 없이 자동 기록되었습니다!
+                  </div>
+
+                  <div className="flex space-x-3">
+                    <button onClick={() => setScreen('start')} className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 text-base font-bold rounded-2xl border border-slate-700 transition-all flex items-center justify-center space-x-2 active:scale-95">
+                      <RotateCcwIcon /><span>처음 화면으로</span>
+                    </button>
+                    <button onClick={startGame} className="flex-1 py-4 bg-amber-400 hover:bg-amber-300 text-emerald-950 text-base font-extrabold rounded-2xl shadow-lg transition-all flex items-center justify-center active:scale-95">
+                      <span>🎮 다시 도전하기</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </main>
+
+          {/* FOOTER */}
+          <footer className="text-center py-4 text-xs text-slate-500 border-t border-emerald-950/40 bg-slate-950/25">
+            <div className="max-w-4xl mx-auto px-4">© 2026 소수 마스터 챌린지 - 초등 수학 연산 게미피케이션 시스템.</div>
+          </footer>
+
+        </div>
+      );
     }
-</script>
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
 </body>
 </html>
